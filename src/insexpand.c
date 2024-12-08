@@ -1228,7 +1228,7 @@ ins_compl_build_pum(void)
     compl_T     *shown_compl = NULL;
     int		did_find_shown_match = FALSE;
     int		shown_match_ok = FALSE;
-    int		i;
+    int		i = 0;
     int		cur = -1;
     int		max_fuzzy_score = 0;
     unsigned int cur_cot_flags = get_cot_flags();
@@ -1241,6 +1241,17 @@ ins_compl_build_pum(void)
     // Need to build the popup menu list.
     compl_match_arraysize = 0;
     compl = compl_first_match;
+
+    // If the current match is the original text don't find the first
+    // match after it, don't highlight anything.
+    if (match_at_original_text(compl_shown_match))
+	shown_match_ok = TRUE;
+
+    if (compl_leader.string != NULL
+	    && STRCMP(compl_leader.string, compl_orig_text.string) == 0
+	    && shown_match_ok == FALSE)
+	compl_shown_match = compl_no_select ? compl_first_match
+					    : compl_first_match->cp_next;
 
     do
     {
@@ -1258,98 +1269,47 @@ ins_compl_build_pum(void)
 	    if (match_head == NULL)
 		match_head = compl;
 	    else
-		match_tail->cp_match_next  = compl;
+		match_tail->cp_match_next = compl;
 	    match_tail = compl;
+
+	    if (!shown_match_ok && !compl_fuzzy_match)
+	    {
+		if (compl == compl_shown_match || did_find_shown_match)
+		{
+		    // This item is the shown match or this is the
+		    // first displayed item after the shown match.
+		    compl_shown_match = compl;
+		    did_find_shown_match = TRUE;
+		    shown_match_ok = TRUE;
+		}
+		else
+		    // Remember this displayed match for when the
+		    // shown match is just below it.
+		    shown_compl = compl;
+		cur = i;
+	    }
+	    else if (compl_fuzzy_match)
+	    {
+		if (i == 0)
+		    shown_compl = compl;
+		// Update the maximum fuzzy score and the shown match
+		// if the current item's score is higher
+		if (compl->cp_score > max_fuzzy_score)
+		{
+		    did_find_shown_match = TRUE;
+		    max_fuzzy_score = compl->cp_score;
+		    if (!compl_no_select)
+			compl_shown_match = compl;
+		}
+
+		if (!shown_match_ok && compl == compl_shown_match && !compl_no_select)
+		{
+		    cur = i;
+		    shown_match_ok = TRUE;
+		}
+	    }
+	    i++;
 	}
-	compl = compl->cp_next;
-    } while (compl != NULL && !is_first_match(compl));
-
-    if (compl_match_arraysize == 0)
-	return -1;
-
-    compl_match_array = ALLOC_CLEAR_MULT(pumitem_T, compl_match_arraysize);
-    if (compl_match_array == NULL)
-	return -1;
-
-    // If the current match is the original text don't find the first
-    // match after it, don't highlight anything.
-    if (match_at_original_text(compl_shown_match))
-	shown_match_ok = TRUE;
-
-    if (compl_leader.string != NULL
-	    && STRCMP(compl_leader.string, compl_orig_text.string) == 0
-	    && shown_match_ok == FALSE)
-	compl_shown_match = compl_no_select ? compl_first_match
-					    : compl_first_match->cp_next;
-    i = 0;
-    compl = match_head;
-    if (match_tail == match_head)
-	did_find_shown_match = TRUE;
-    while (compl != NULL)
-    {
-	if (!shown_match_ok && !compl_fuzzy_match)
-	{
-	    if (compl == compl_shown_match || did_find_shown_match)
-	    {
-	        // This item is the shown match or this is the
-	        // first displayed item after the shown match.
-	        compl_shown_match = compl;
-	        did_find_shown_match = TRUE;
-	        shown_match_ok = TRUE;
-	    }
-	    else
-	        // Remember this displayed match for when the
-	        // shown match is just below it.
-	        shown_compl = compl;
-	    cur = i;
-	}
-	else if (compl_fuzzy_match)
-	{
-	    if (i == 0)
-	        shown_compl = compl;
-	    // Update the maximum fuzzy score and the shown match
-	    // if the current item's score is higher
-	    if (compl->cp_score > max_fuzzy_score)
-	    {
-	        did_find_shown_match = TRUE;
-	        max_fuzzy_score = compl->cp_score;
-	        if (!compl_no_select)
-		   compl_shown_match = compl;
-	    }
-
-	    if (!shown_match_ok && compl == compl_shown_match && !compl_no_select)
-	    {
-	        cur = i;
-	        shown_match_ok = TRUE;
-	    }
-
-	    // If there is no "no select" condition and the max fuzzy
-	    // score is positive, or there is no completion leader or the
-	    // leader length is zero, mark the shown match as valid and
-	    // reset the current index.
-	    if (!compl_no_select
-		    && (max_fuzzy_score > 0
-			|| (compl_leader.string == NULL || compl_leader.length == 0)))
-	    {
-	        if (match_at_original_text(compl_shown_match))
-		    compl_shown_match = shown_compl;
-	    }
-	}
-
-	if (compl->cp_text[CPT_ABBR] != NULL)
-	    compl_match_array[i].pum_text = compl->cp_text[CPT_ABBR];
-	else
-	    compl_match_array[i].pum_text = compl->cp_str.string;
-	compl_match_array[i].pum_kind = compl->cp_text[CPT_KIND];
-	compl_match_array[i].pum_info = compl->cp_text[CPT_INFO];
-	compl_match_array[i].pum_score = compl->cp_score;
-	compl_match_array[i].pum_user_abbr_hlattr = compl->cp_user_abbr_hlattr;
-	compl_match_array[i].pum_user_kind_hlattr = compl->cp_user_kind_hlattr;
-	if (compl->cp_text[CPT_MENU] != NULL)
-	    compl_match_array[i++].pum_extra =
-	        compl->cp_text[CPT_MENU];
-	else
-	    compl_match_array[i++].pum_extra = compl->cp_fname;
 
 	if (compl == compl_shown_match && !compl_fuzzy_match)
 	{
@@ -1368,6 +1328,34 @@ ins_compl_build_pum(void)
 		shown_match_ok = TRUE;
 	    }
 	}
+	compl = compl->cp_next;
+    } while (compl != NULL && !is_first_match(compl));
+
+    if (compl_match_arraysize == 0)
+	return -1;
+
+    compl_match_array = ALLOC_CLEAR_MULT(pumitem_T, compl_match_arraysize);
+    if (compl_match_array == NULL)
+	return -1;
+
+    compl = match_head;
+    i = 0;
+    while (compl != NULL)
+    {
+	if (compl->cp_text[CPT_ABBR] != NULL)
+	    compl_match_array[i].pum_text = compl->cp_text[CPT_ABBR];
+	else
+	    compl_match_array[i].pum_text = compl->cp_str.string;
+	compl_match_array[i].pum_kind = compl->cp_text[CPT_KIND];
+	compl_match_array[i].pum_info = compl->cp_text[CPT_INFO];
+	compl_match_array[i].pum_score = compl->cp_score;
+	compl_match_array[i].pum_user_abbr_hlattr = compl->cp_user_abbr_hlattr;
+	compl_match_array[i].pum_user_kind_hlattr = compl->cp_user_kind_hlattr;
+	if (compl->cp_text[CPT_MENU] != NULL)
+	    compl_match_array[i++].pum_extra =
+	        compl->cp_text[CPT_MENU];
+	else
+	    compl_match_array[i++].pum_extra = compl->cp_fname;
 	match_next = compl->cp_match_next;
 	compl->cp_match_next = NULL;
 	compl = match_next;
@@ -2309,12 +2297,42 @@ set_ctrl_x_mode(int c)
 }
 
 /*
+ * Trigger CompleteDone event and adds relevant information to v:event
+ */
+    static void
+trigger_complete_done_event(int mode UNUSED, char_u *word UNUSED)
+{
+#if defined(FEAT_EVAL)
+    save_v_event_T	save_v_event;
+    dict_T		*v_event = get_v_event(&save_v_event);
+    char_u		*mode_str = NULL;
+
+    mode = mode & ~CTRL_X_WANT_IDENT;
+    if (ctrl_x_mode_names[mode])
+	mode_str = (char_u *)ctrl_x_mode_names[mode];
+
+    (void)dict_add_string(v_event, "complete_word",
+				word == NULL ? (char_u *)"" : word);
+    (void)dict_add_string(v_event, "complete_type",
+				mode_str != NULL ? mode_str : (char_u *)"");
+
+    dict_set_items_ro(v_event);
+#endif
+    ins_apply_autocmds(EVENT_COMPLETEDONE);
+
+#if defined(FEAT_EVAL)
+    restore_v_event(v_event, &save_v_event);
+#endif
+}
+
+/*
  * Stop insert completion mode
  */
     static int
 ins_compl_stop(int c, int prev_mode, int retval)
 {
     int		want_cindent;
+    char_u	*word = NULL;
 
     // Get here when we have finished typing a sequence of ^N and
     // ^P or other completion characters in CTRL-X mode.  Free up
@@ -2370,7 +2388,10 @@ ins_compl_stop(int c, int prev_mode, int retval)
     if ((c == Ctrl_Y || (compl_enter_selects
 		    && (c == CAR || c == K_KENTER || c == NL)))
 	    && pum_visible())
+    {
+	word = vim_strsave(compl_shown_match->cp_str.string);
 	retval = TRUE;
+    }
 
     // CTRL-E means completion is Ended, go back to the typed text.
     // but only do this, if the Popup is still visible
@@ -2430,7 +2451,8 @@ ins_compl_stop(int c, int prev_mode, int retval)
 	do_c_expr_indent();
     // Trigger the CompleteDone event to give scripts a chance to act
     // upon the end of completion.
-    ins_apply_autocmds(EVENT_COMPLETEDONE);
+    trigger_complete_done_event(prev_mode, word);
+    vim_free(word);
 
     return retval;
 }
@@ -2550,7 +2572,7 @@ ins_compl_prep(int c)
     else if (ctrl_x_mode == CTRL_X_LOCAL_MSG)
 	// Trigger the CompleteDone event to give scripts a chance to act
 	// upon the (possibly failed) completion.
-	ins_apply_autocmds(EVENT_COMPLETEDONE);
+	trigger_complete_done_event(ctrl_x_mode, NULL);
 
     may_trigger_modechanged();
 

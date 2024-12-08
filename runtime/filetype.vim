@@ -452,6 +452,9 @@ au BufNewFile,BufRead .clang-format		setf yaml
 " Clang-tidy
 au BufNewFile,BufRead .clang-tidy		setf yaml
 
+" Conda configuration file
+au BufNewFile,BufRead .condarc,condarc		setf yaml
+
 " Matplotlib
 au BufNewFile,BufRead *.mplstyle,matplotlibrc	setf yaml
 
@@ -1973,6 +1976,10 @@ au BufNewFile,BufRead *.pk			setf poke
 " Protocols
 au BufNewFile,BufRead */etc/protocols		setf protocols
 
+" Nvidia PTX (Parallel Thread Execution)
+" See https://docs.nvidia.com/cuda/parallel-thread-execution/
+au BufNewFile,BufRead *.ptx			setf ptx
+
 " Purescript
 au BufNewFile,BufRead *.purs			setf purescript
 
@@ -1982,8 +1989,8 @@ au BufNewFile,BufRead MANIFEST.in		setf pymanifest
 " Pyret
 au BufNewFile,BufRead *.arr			setf pyret
 
-" Pyrex
-au BufNewFile,BufRead *.pyx,*.pxd		setf pyrex
+" Pyrex/Cython
+au BufNewFile,BufRead *.pyx,*.pyx+,*.pxd,*.pxi	setf pyrex
 
 " Python, Python Shell Startup and Python Stub Files
 " Quixote (Python-based web framework)
